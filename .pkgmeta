@@ -1,0 +1,7 @@
+package-as: BigBreak
+changelog-from: CHANGELOG.md
+
+ignore:
+  - CLAUDE.md
+  - PLAN.md
+  - .claude

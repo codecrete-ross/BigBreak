@@ -1,0 +1,13 @@
+# Classic support: add BigBreak_Vanilla.toc (Interface: 11508), BigBreak_Cata.toc (Interface: 40402), etc.
+# The Lua code is already gated for older clients. Only the TOC files are needed.
+## Interface: 120005, 120001, 120000
+## Title: BigBreak
+## Notes: A simple break timer with no external dependencies.
+## Author: Codecrete
+## Version: @project-version@
+## Category-enUS: Raid
+## IconTexture: Interface\Icons\Spell_Holy_BorrowedTime
+## AddonCompartmentFunc: BigBreak_OnAddonCompartmentClick
+## SavedVariables: BigBreakDB
+## SavedVariablesPerCharacter: BigBreakCharDB
+BigBreak.lua
