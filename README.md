@@ -2,14 +2,12 @@
 
 ![BigBreak](logo.png)
 
-A simple break timer for World of Warcraft. Displays break timers sent by DBM and BigWigs without requiring either addon.
+A simple break timer for World of Warcraft with DBM and BigWigs interop.
 
 ## Features
 
-- Color-coded break timer bar
-- Receives break timers from DBM and BigWigs users
+- Color-coded countdown bar
 - Persists across /reload
-- Configurable bar size
 - Right-click bar to cancel
 
 ## How To Use
