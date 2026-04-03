@@ -9,7 +9,7 @@ A simple break timer for World of Warcraft. Displays break timers sent by DBM an
 - Color-coded break timer bar
 - Receives break timers from DBM and BigWigs users
 - Persists across /reload
-- Configurable bar size and alerts
+- Configurable bar size
 - Right-click bar to cancel
 
 ## How To Use
