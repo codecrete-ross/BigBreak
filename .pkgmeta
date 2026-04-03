@@ -5,3 +5,6 @@ ignore:
   - CLAUDE.md
   - PLAN.md
   - .claude
+  - README.md
+  - logo.png
+  - .gitignore

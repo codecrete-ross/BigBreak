@@ -6,7 +6,7 @@
 ## Author: Codecrete
 ## Version: @project-version@
 ## Category-enUS: Raid
-## IconTexture: Interface\Icons\Spell_Holy_BorrowedTime
+## IconTexture: Interface\AddOns\BigBreak\logo
 ## AddonCompartmentFunc: BigBreak_OnAddonCompartmentClick
 ## SavedVariables: BigBreakDB
 ## SavedVariablesPerCharacter: BigBreakCharDB
