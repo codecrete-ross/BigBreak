@@ -1,5 +1,7 @@
 # BigBreak
 
+![BigBreak](logo.png)
+
 A simple break timer for World of Warcraft. Displays break timers sent by DBM and BigWigs without requiring either addon.
 
 ## Features
