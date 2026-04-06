@@ -1,3 +1,10 @@
+## 1.0.1
+
+- Break timers from non-leaders are now ignored, matching DBM and BigWigs behavior
+- Incoming timers are now rejected during boss encounters
+- Incoming timer durations are now capped at 60 minutes
+- Fixed a rare issue where a same-named player on another realm could have their timers silently ignored
+
 ## 1.0.0
 
 - Initial release

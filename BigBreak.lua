@@ -47,10 +47,7 @@ local function GetPlayerFullName()
 end
 
 local function SenderIsMe(sender)
-    local myFull = GetPlayerFullName()
-    if sender == myFull then return true end
-    if StripRealm(sender) == UnitName("player") then return true end
-    return false
+    return sender == GetPlayerFullName()
 end
 
 local function GetChannel()
@@ -80,6 +77,28 @@ local function IsRestricted()
         return true, "Cannot send timers in LFR."
     end
     return false, nil
+end
+
+local function SenderHasRank(sender)
+    if not IsInGroup() then return true end
+    local short = StripRealm(sender)
+    if IsInRaid() then
+        for i = 1, MAX_RAID_MEMBERS do
+            local name, rank = GetRaidRosterInfo(i)
+            if name and StripRealm(name) == short and rank > 0 then
+                return true
+            end
+        end
+        return false
+    end
+    for i = 1, 4 do
+        local unit = "party" .. i
+        local unitName = UnitName(unit)
+        if unitName and unitName == short then
+            return UnitIsGroupLeader(unit) or UnitIsGroupAssistant(unit)
+        end
+    end
+    return false
 end
 
 local function IsDupe(sender, seconds)
@@ -440,10 +459,13 @@ function BB:ParseBigBreakMessage(message, sender)
 
     if cmd == "BREAK" then
         local seconds = tonumber(val)
-        if not seconds or seconds <= 0 then return end
+        if not seconds or seconds <= 0 or seconds > 3600 then return end
+        if IsEncounterInProgress() then return end
+        if not SenderHasRank(sender) then return end
         if IsDupe(sender, seconds) then return end
         BB:StartTimer(seconds, name or sender)
     elseif cmd == "CANCEL" then
+        if not SenderHasRank(sender) then return end
         BB:CancelTimer()
     elseif cmd == "SYNC_REQ" then
         if BB.activeTimer then
@@ -461,7 +483,7 @@ function BB:ParseBigBreakMessage(message, sender)
         if not BB.activeTimer then
             local seconds = tonumber(val)
             local senderName = select(3, strsplit("\t", message))
-            if seconds and seconds > 1 then
+            if seconds and seconds > 1 and seconds <= 3600 then
                 BB:StartTimer(seconds, senderName or sender, true)
             end
         end
@@ -476,9 +498,12 @@ function BB:ParseDBMMessage(message, sender)
         local seconds = tonumber(arg1)
         if not seconds then return end
         if seconds == 0 then
-            BB:CancelTimer()
+            if SenderHasRank(sender) then BB:CancelTimer() end
             return
         end
+        if seconds > 3600 then return end
+        if IsEncounterInProgress() then return end
+        if not SenderHasRank(sender) then return end
         if IsDupe(sender, seconds) then return end
         BB:StartTimer(seconds, sender)
     end
