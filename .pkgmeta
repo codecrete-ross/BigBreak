@@ -1,10 +1,13 @@
 package-as: BigBreak
-changelog-from: CHANGELOG.md
-
+enable-nolib-creation: no
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
 ignore:
   - CLAUDE.md
   - PLAN.md
   - .claude
+  - .pkgmeta
   - README.md
   - logo.png
   - .gitignore
