@@ -175,6 +175,10 @@ local function CreateTimerBar()
     end)
     bar:SetScript("OnMouseUp", function(self, button)
         if button == "RightButton" and BB.activeTimer then
+            if not HasPermission() then
+                Print("You need to be the group leader or an assistant to cancel a break timer.")
+                return
+            end
             if IsInGroup() then BB:BroadcastCancel() end
             BB:CancelTimer()
         end
@@ -481,6 +485,7 @@ function BB:ParseBigBreakMessage(message, sender)
         end
     elseif cmd == "SYNC_RESP" then
         if not BB.activeTimer then
+            if not SenderHasRank(sender) then return end
             local seconds = tonumber(val)
             local senderName = select(3, strsplit("\t", message))
             if seconds and seconds > 1 and seconds <= 3600 then
@@ -521,6 +526,10 @@ local function SlashBreak(msg)
     end
 
     if minutes == 0 then
+        if not HasPermission() then
+            Print("You need to be the group leader or an assistant to cancel a break timer.")
+            return
+        end
         if IsInGroup() then BB:BroadcastCancel() end
         BB:CancelTimer()
         return
@@ -532,7 +541,7 @@ local function SlashBreak(msg)
     end
 
     if not HasPermission() then
-        Print("You need to be raid leader or assistant to send a break timer.")
+        Print("You need to be the group leader or an assistant to send a break timer.")
         return
     end
 

@@ -1,3 +1,8 @@
+## 1.0.2
+
+- Group members who aren't leaders or assists can no longer cancel break timers via right-click or /break 0
+- Timer sync on reload now only accepts timers from leaders and assists
+
 ## 1.0.1
 
 - Break timers from non-leaders are now ignored, matching DBM and BigWigs behavior
