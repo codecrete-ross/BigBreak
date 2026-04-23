@@ -4,6 +4,7 @@ manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
 ignore:
+  - AGENTS.md
   - CLAUDE.md
   - PLAN.md
   - .claude
