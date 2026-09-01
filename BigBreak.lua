@@ -5,8 +5,22 @@ BB.timerFrame = nil
 BB.locked = false
 BB.lastReceived = {}
 BB.settingsCategory = nil
+BB.wasInGroup = false
+BB.initialized = false
+BB.syncPending = false
 
 local CHAT_PREFIX = "|cff00ccff[BigBreak]|r "
+local HasRestrictionStateEvent = C_ChatInfo.InChatMessagingLockdown ~= nil
+local InChatMessagingLockdown = C_ChatInfo.InChatMessagingLockdown or function() return false end
+local CHAT_RESTRICTION_TYPE = HasRestrictionStateEvent
+    and Enum and Enum.AddOnRestrictionType and Enum.AddOnRestrictionType.Chat
+local RESTRICTION_INACTIVE = HasRestrictionStateEvent
+    and Enum and Enum.AddOnRestrictionState and Enum.AddOnRestrictionState.Inactive
+local VALID_ADDON_CHANNELS = {
+    PARTY = true,
+    RAID = true,
+    INSTANCE_CHAT = true,
+}
 
 local BAR_SIZES = {
     [1] = { key = "Big",    width = 440, height = 44, font = "GameFontHighlightLarge" },
@@ -68,9 +82,34 @@ local function HasPermission()
     return false
 end
 
+local function GetCommunicationRestriction(action)
+    if IsEncounterInProgress() then
+        return true, "Cannot " .. action .. " a break timer during an encounter."
+    end
+    if InChatMessagingLockdown() then
+        return true, "Cannot " .. action .. " a break timer while addon messaging is restricted."
+    end
+    return false, nil
+end
+
+local function PrintCommunicationFailure(action)
+    local _, reason = GetCommunicationRestriction(action)
+    if reason then
+        Print(reason)
+    elseif action == "start" then
+        Print("Unable to share the break timer with your group.")
+    else
+        Print("Unable to cancel the group break timer.")
+    end
+end
+
 local function IsRestricted()
     if C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive and C_ChallengeMode.IsChallengeModeActive() then
         return true, "Cannot send timers in Mythic+."
+    end
+    if IsInGroup() then
+        local restricted, reason = GetCommunicationRestriction("start")
+        if restricted then return true, reason end
     end
     local _, _, difficultyID = GetInstanceInfo()
     if difficultyID == 17 then
@@ -175,11 +214,22 @@ local function CreateTimerBar()
     end)
     bar:SetScript("OnMouseUp", function(self, button)
         if button == "RightButton" and BB.activeTimer then
-            if not HasPermission() then
+            local sharedTimer = IsInGroup() and not BB.activeTimer.localOnly
+            if sharedTimer and not HasPermission() then
                 Print("You need to be the group leader or an assistant to cancel a break timer.")
                 return
             end
-            if IsInGroup() then BB:BroadcastCancel() end
+            if sharedTimer then
+                local restricted, reason = GetCommunicationRestriction("cancel")
+                if restricted then
+                    Print(reason)
+                    return
+                end
+                if not BB:BroadcastCancel() then
+                    PrintCommunicationFailure("cancel")
+                    return
+                end
+            end
             BB:CancelTimer()
         end
     end)
@@ -355,7 +405,7 @@ end
 -- Timer Logic
 -- ============================================================================
 
-function BB:StartTimer(duration, senderName, silent, originalDuration)
+function BB:StartTimer(duration, senderName, silent, originalDuration, localOnly)
     if not BB.timerFrame then CreateTimerBar() end
 
     if BB.activeTimer then
@@ -369,7 +419,9 @@ function BB:StartTimer(duration, senderName, silent, originalDuration)
         endTime = GetTime() + duration, -- actual countdown
         sender = senderName,
         warnedOneMin = false,
+        localOnly = localOnly or false,
     }
+    BB.syncPending = false
 
     -- Pre-set warning flag for short remaining timers
     if duration <= 90 then BB.activeTimer.warnedOneMin = true end
@@ -379,6 +431,7 @@ function BB:StartTimer(duration, senderName, silent, originalDuration)
         duration = total,
         endServerTime = GetServerTime() + duration,
         sender = senderName,
+        localOnly = localOnly or false,
     }
 
     local bar = BB.timerFrame
@@ -422,25 +475,65 @@ end
 -- Communication: Send
 -- ============================================================================
 
-function BB:Broadcast(seconds)
+local function AddonMessageWasAccepted(result)
+    return result == nil or result == true or result == 0
+end
+
+function BB:RequestSync()
+    if BB.activeTimer or not IsInGroup() then
+        BB.syncPending = false
+        return false
+    end
+    if IsEncounterInProgress() or InChatMessagingLockdown() then
+        BB.syncPending = true
+        return false
+    end
+
     local channel = GetChannel()
-    if not channel then return end
+    if not channel then
+        BB.syncPending = false
+        return false
+    end
+
+    local result = C_ChatInfo.SendAddonMessage("BigBreak", "SYNC_REQ", channel)
+    if AddonMessageWasAccepted(result) then
+        BB.syncPending = false
+        return true
+    end
+
+    BB.syncPending = true
+    return false
+end
+
+function BB:Broadcast(seconds)
+    if IsEncounterInProgress() or InChatMessagingLockdown() then return false end
+
+    local channel = GetChannel()
+    if not channel then return false end
 
     local playerName = UnitName("player")
     local fullName = GetPlayerFullName()
 
-    C_ChatInfo.SendAddonMessage("BigBreak", "BREAK\t" .. seconds .. "\t" .. playerName, channel)
-    C_ChatInfo.SendAddonMessage("D5", fullName .. "\t1\tBT\t" .. seconds, channel)
+    local bigBreakResult = C_ChatInfo.SendAddonMessage(
+        "BigBreak", "BREAK\t" .. seconds .. "\t" .. playerName, channel)
+    local dbmResult = C_ChatInfo.SendAddonMessage(
+        "D5", fullName .. "\t1\tBT\t" .. seconds, channel)
+    return AddonMessageWasAccepted(bigBreakResult) or AddonMessageWasAccepted(dbmResult)
 end
 
 function BB:BroadcastCancel()
+    if IsEncounterInProgress() or InChatMessagingLockdown() then return false end
+
     local channel = GetChannel()
-    if not channel then return end
+    if not channel then return false end
 
     local playerName = UnitName("player")
     local fullName = GetPlayerFullName()
-    C_ChatInfo.SendAddonMessage("BigBreak", "CANCEL\tBREAK\t" .. playerName, channel)
-    C_ChatInfo.SendAddonMessage("D5", fullName .. "\t1\tBT\t0", channel)
+    local bigBreakResult = C_ChatInfo.SendAddonMessage(
+        "BigBreak", "CANCEL\tBREAK\t" .. playerName, channel)
+    local dbmResult = C_ChatInfo.SendAddonMessage(
+        "D5", fullName .. "\t1\tBT\t0", channel)
+    return AddonMessageWasAccepted(bigBreakResult) or AddonMessageWasAccepted(dbmResult)
 end
 
 -- ============================================================================
@@ -448,6 +541,7 @@ end
 -- ============================================================================
 
 function BB:OnAddonMessage(prefix, message, channel, sender)
+    if not VALID_ADDON_CHANNELS[channel] then return end
     if SenderIsMe(sender) then return end
 
     if prefix == "BigBreak" then
@@ -458,13 +552,13 @@ function BB:OnAddonMessage(prefix, message, channel, sender)
 end
 
 function BB:ParseBigBreakMessage(message, sender)
-    local cmd, val, name = strsplit("\t", message)
+    local cmd, val, name, extra = strsplit("\t", message)
     if not cmd then return end
 
     if cmd == "BREAK" then
         local seconds = tonumber(val)
         if not seconds or seconds <= 0 or seconds > 3600 then return end
-        if IsEncounterInProgress() then return end
+        if IsEncounterInProgress() or InChatMessagingLockdown() then return end
         if not SenderHasRank(sender) then return end
         if IsDupe(sender, seconds) then return end
         BB:StartTimer(seconds, name or sender)
@@ -472,24 +566,32 @@ function BB:ParseBigBreakMessage(message, sender)
         if not SenderHasRank(sender) then return end
         BB:CancelTimer()
     elseif cmd == "SYNC_REQ" then
-        if BB.activeTimer then
+        if BB.activeTimer and not BB.activeTimer.localOnly
+            and not IsEncounterInProgress() and not InChatMessagingLockdown() then
             local remaining = BB.activeTimer.endTime - GetTime()
             if remaining > 1 then
                 local ch = GetChannel()
                 if ch then
                     C_ChatInfo.SendAddonMessage("BigBreak",
-                        "SYNC_RESP\tBREAK\t" .. format("%.1f", remaining) .. "\t"
+                        "SYNC_RESP\t" .. format("%.1f", remaining) .. "\t"
                         .. (BB.activeTimer.sender or ""), ch)
                 end
             end
         end
     elseif cmd == "SYNC_RESP" then
+        if IsEncounterInProgress() or InChatMessagingLockdown() then return end
         if not BB.activeTimer then
             if not SenderHasRank(sender) then return end
-            local seconds = tonumber(val)
-            local senderName = select(3, strsplit("\t", message))
+            local seconds, senderName
+            if val == "BREAK" then
+                seconds = tonumber(name)
+                senderName = extra
+            else
+                seconds = tonumber(val)
+                senderName = name
+            end
             if seconds and seconds > 1 and seconds <= 3600 then
-                BB:StartTimer(seconds, senderName or sender, true)
+                BB:StartTimer(seconds, (senderName and senderName ~= "") and senderName or sender, true)
             end
         end
     end
@@ -506,8 +608,8 @@ function BB:ParseDBMMessage(message, sender)
             if SenderHasRank(sender) then BB:CancelTimer() end
             return
         end
-        if seconds > 3600 then return end
-        if IsEncounterInProgress() then return end
+        if seconds < 0 or seconds > 3600 then return end
+        if IsEncounterInProgress() or InChatMessagingLockdown() then return end
         if not SenderHasRank(sender) then return end
         if IsDupe(sender, seconds) then return end
         BB:StartTimer(seconds, sender)
@@ -526,11 +628,22 @@ local function SlashBreak(msg)
     end
 
     if minutes == 0 then
-        if not HasPermission() then
+        local sharedTimer = IsInGroup() and (not BB.activeTimer or not BB.activeTimer.localOnly)
+        if sharedTimer and not HasPermission() then
             Print("You need to be the group leader or an assistant to cancel a break timer.")
             return
         end
-        if IsInGroup() then BB:BroadcastCancel() end
+        if sharedTimer then
+            local restricted, reason = GetCommunicationRestriction("cancel")
+            if restricted then
+                Print(reason)
+                return
+            end
+            if not BB:BroadcastCancel() then
+                PrintCommunicationFailure("cancel")
+                return
+            end
+        end
         BB:CancelTimer()
         return
     end
@@ -553,8 +666,12 @@ local function SlashBreak(msg)
 
     local playerName = GetPlayerFullName()
     local seconds = minutes * 60
-    BB:StartTimer(seconds, playerName)
-    BB:Broadcast(seconds)
+    local inGroup = IsInGroup()
+    if inGroup and not BB:Broadcast(seconds) then
+        PrintCommunicationFailure("start")
+        return
+    end
+    BB:StartTimer(seconds, playerName, false, nil, not inGroup)
 end
 
 local function SlashBigBreak(msg)
@@ -581,7 +698,7 @@ local function SlashBigBreak(msg)
         BigBreakDB.flash = not BigBreakDB.flash
         Print("Flash " .. (BigBreakDB.flash and "enabled" or "disabled") .. ".")
     elseif cmd == "test" then
-        BB:StartTimer(15, GetPlayerFullName())
+        BB:StartTimer(15, GetPlayerFullName(), false, nil, true)
     elseif cmd == "reset" then
         BB:ResetToDefaults()
     else
@@ -607,6 +724,10 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("CHAT_MSG_ADDON")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+if CHAT_RESTRICTION_TYPE and RESTRICTION_INACTIVE ~= nil then
+    frame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+end
 
 frame:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
@@ -646,19 +767,16 @@ frame:SetScript("OnEvent", function(self, event, ...)
         if saved and saved.endServerTime then
             local remaining = saved.endServerTime - GetServerTime()
             if remaining > 1 then
-                BB:StartTimer(remaining, saved.sender, true, saved.duration)
+                BB:StartTimer(remaining, saved.sender, true, saved.duration, saved.localOnly)
             else
                 BigBreakDB.activeTimer = nil
             end
         end
 
-        -- Request timer state from group
-        if IsInGroup() then
-            local channel = GetChannel()
-            if channel then
-                C_ChatInfo.SendAddonMessage("BigBreak", "SYNC_REQ", channel)
-            end
-        end
+        -- Request timer state when loading into a group without a local timer
+        BB.wasInGroup = IsInGroup()
+        if BB.wasInGroup then BB:RequestSync() end
+        BB.initialized = true
 
         -- Addon conflict warning
         if C_AddOns then
@@ -676,8 +794,25 @@ frame:SetScript("OnEvent", function(self, event, ...)
         BB:OnAddonMessage(prefix, message, channel, sender)
 
     elseif event == "GROUP_ROSTER_UPDATE" then
-        if BB.activeTimer and not IsInGroup() then
-            BB:CancelTimer(true)
+        if not BB.initialized then return end
+
+        local inGroup = IsInGroup()
+        if not inGroup then
+            BB.syncPending = false
+            if BB.activeTimer then BB:CancelTimer(true) end
+        elseif not BB.wasInGroup then
+            BB:RequestSync()
+        end
+        BB.wasInGroup = inGroup
+
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        if BB.syncPending then BB:RequestSync() end
+
+    elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
+        local restrictionType, state = ...
+        if BB.syncPending and restrictionType == CHAT_RESTRICTION_TYPE
+            and state == RESTRICTION_INACTIVE then
+            BB:RequestSync()
         end
     end
 end)

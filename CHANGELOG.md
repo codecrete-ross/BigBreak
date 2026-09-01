@@ -1,3 +1,10 @@
+## 1.0.3
+
+- Updated for Midnight Season 2
+- Shared timer starts and cancellations are now safely blocked when group messaging is unavailable
+- Fixed active timer recovery after reloading or joining a group
+- Addon timer messages from outside party, raid, and instance groups are now ignored
+
 ## 1.0.2
 
 - Group members who aren't leaders or assists can no longer cancel break timers via right-click or /break 0

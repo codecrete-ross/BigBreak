@@ -48,8 +48,8 @@ Never push, tag, or release untested changes.
 
 ## Verified Protocol Sources
 
-- `G:\Battle.net Games\World of Warcraft\_retail_\Interface\AddOns\DBM-Core\modules\objects\UserTimers.lua`
-- `G:\Battle.net Games\World of Warcraft\_retail_\Interface\AddOns\DBM-Core\modules\objects\AddonComms.lua`
+- `G:\Battle.net Games\World of Warcraft\_retail_\Interface\AddOns\DBM-Core\modules\UserTimers.lua`
+- `G:\Battle.net Games\World of Warcraft\_retail_\Interface\AddOns\DBM-Core\modules\AddonComms.lua`
 - `G:\Battle.net Games\World of Warcraft\_retail_\Interface\AddOns\BigWigs_Plugins\Break.lua`
 - `G:\Battle.net Games\World of Warcraft\_retail_\Interface\AddOns\BigWigs\Loader.lua`
 
