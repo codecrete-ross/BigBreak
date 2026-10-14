@@ -465,7 +465,7 @@ function BB:TimerComplete()
     BigBreakDB.activeTimer = nil
     if BB.timerFrame then BB.timerFrame:Hide() end
 
-    RaidNotice_AddMessage(RaidWarningFrame, "BREAK IS OVER!", ChatTypeInfo["RAID_WARNING"])
+    RaidWarningUtil.AddMessage("BREAK IS OVER!", ChatTypeInfo["RAID_WARNING"])
     Print("|cff00ff00Break is over!|r")
     if BigBreakDB.sound then PlaySound(SOUNDKIT.UI_BATTLEGROUND_COUNTDOWN_FINISHED) end
     if BigBreakDB.flash then FlashClientIcon() end

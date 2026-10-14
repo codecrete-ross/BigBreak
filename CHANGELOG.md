@@ -1,3 +1,8 @@
+## 1.0.4
+
+- Updated for WoW Retail 12.1.5
+- Improved reliability of break-complete alerts
+
 ## 1.0.3
 
 - Updated for Midnight Season 2
