@@ -1,3 +1,7 @@
+## 1.0.5
+
+- Added support for World of Warcraft: Forever.
+
 ## 1.0.4
 
 - Updated for WoW Retail 12.1.5

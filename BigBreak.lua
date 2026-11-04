@@ -10,6 +10,7 @@ BB.initialized = false
 BB.syncPending = false
 
 local CHAT_PREFIX = "|cff00ccff[BigBreak]|r "
+local IsEncounterInProgress = C_InstanceEncounter.IsEncounterInProgress
 local HasRestrictionStateEvent = C_ChatInfo.InChatMessagingLockdown ~= nil
 local InChatMessagingLockdown = C_ChatInfo.InChatMessagingLockdown or function() return false end
 local CHAT_RESTRICTION_TYPE = HasRestrictionStateEvent
@@ -53,15 +54,11 @@ end
 
 local function GetPlayerFullName()
     local name, realm = UnitFullName("player")
-    if not name then return "Unknown" end
+    if issecretvalue(name) or issecretvalue(realm) or not name or name == "" then return nil end
     if realm and realm ~= "" then
-        return name .. "-" .. realm
+        return name .. "-" .. realm, name
     end
-    return name
-end
-
-local function SenderIsMe(sender)
-    return sender == GetPlayerFullName()
+    return name, name
 end
 
 local function GetChannel()
@@ -75,11 +72,15 @@ local function GetChannel()
     return nil
 end
 
+local function HasGroupRank(unit)
+    local leader = UnitIsGroupLeader(unit)
+    if not issecretvalue(leader) and leader then return true end
+    local assistant = UnitIsGroupAssistant(unit)
+    return not issecretvalue(assistant) and assistant
+end
+
 local function HasPermission()
-    if not IsInGroup() then return true end -- solo
-    if UnitIsGroupLeader("player") then return true end
-    if UnitIsGroupAssistant("player") then return true end
-    return false
+    return not IsInGroup() or HasGroupRank("player")
 end
 
 local function GetCommunicationRestriction(action)
@@ -124,7 +125,8 @@ local function SenderHasRank(sender)
     if IsInRaid() then
         for i = 1, MAX_RAID_MEMBERS do
             local name, rank = GetRaidRosterInfo(i)
-            if name and StripRealm(name) == short and rank > 0 then
+            if not issecretvalue(name) and not issecretvalue(rank)
+                and name and rank and StripRealm(name) == short and rank > 0 then
                 return true
             end
         end
@@ -133,8 +135,8 @@ local function SenderHasRank(sender)
     for i = 1, 4 do
         local unit = "party" .. i
         local unitName = UnitName(unit)
-        if unitName and unitName == short then
-            return UnitIsGroupLeader(unit) or UnitIsGroupAssistant(unit)
+        if not issecretvalue(unitName) and unitName == short then
+            return HasGroupRank(unit)
         end
     end
     return false
@@ -505,14 +507,11 @@ function BB:RequestSync()
     return false
 end
 
-function BB:Broadcast(seconds)
+function BB:Broadcast(seconds, fullName, playerName)
     if IsEncounterInProgress() or InChatMessagingLockdown() then return false end
 
     local channel = GetChannel()
-    if not channel then return false end
-
-    local playerName = UnitName("player")
-    local fullName = GetPlayerFullName()
+    if not channel or not fullName then return false end
 
     local bigBreakResult = C_ChatInfo.SendAddonMessage(
         "BigBreak", "BREAK\t" .. seconds .. "\t" .. playerName, channel)
@@ -527,8 +526,8 @@ function BB:BroadcastCancel()
     local channel = GetChannel()
     if not channel then return false end
 
-    local playerName = UnitName("player")
-    local fullName = GetPlayerFullName()
+    local fullName, playerName = GetPlayerFullName()
+    if not fullName then return false end
     local bigBreakResult = C_ChatInfo.SendAddonMessage(
         "BigBreak", "CANCEL\tBREAK\t" .. playerName, channel)
     local dbmResult = C_ChatInfo.SendAddonMessage(
@@ -541,8 +540,12 @@ end
 -- ============================================================================
 
 function BB:OnAddonMessage(prefix, message, channel, sender)
+    if issecretvalue(prefix) or issecretvalue(message) or issecretvalue(channel)
+        or issecretvalue(sender) then return end
     if not VALID_ADDON_CHANNELS[channel] then return end
-    if SenderIsMe(sender) then return end
+    if IsEncounterInProgress() or InChatMessagingLockdown() then return end
+    local playerName = GetPlayerFullName()
+    if not playerName or sender == playerName then return end
 
     if prefix == "BigBreak" then
         BB:ParseBigBreakMessage(message, sender)
@@ -558,7 +561,6 @@ function BB:ParseBigBreakMessage(message, sender)
     if cmd == "BREAK" then
         local seconds = tonumber(val)
         if not seconds or seconds <= 0 or seconds > 3600 then return end
-        if IsEncounterInProgress() or InChatMessagingLockdown() then return end
         if not SenderHasRank(sender) then return end
         if IsDupe(sender, seconds) then return end
         BB:StartTimer(seconds, name or sender)
@@ -566,8 +568,7 @@ function BB:ParseBigBreakMessage(message, sender)
         if not SenderHasRank(sender) then return end
         BB:CancelTimer()
     elseif cmd == "SYNC_REQ" then
-        if BB.activeTimer and not BB.activeTimer.localOnly
-            and not IsEncounterInProgress() and not InChatMessagingLockdown() then
+        if BB.activeTimer and not BB.activeTimer.localOnly then
             local remaining = BB.activeTimer.endTime - GetTime()
             if remaining > 1 then
                 local ch = GetChannel()
@@ -579,7 +580,6 @@ function BB:ParseBigBreakMessage(message, sender)
             end
         end
     elseif cmd == "SYNC_RESP" then
-        if IsEncounterInProgress() or InChatMessagingLockdown() then return end
         if not BB.activeTimer then
             if not SenderHasRank(sender) then return end
             local seconds, senderName
@@ -609,7 +609,6 @@ function BB:ParseDBMMessage(message, sender)
             return
         end
         if seconds < 0 or seconds > 3600 then return end
-        if IsEncounterInProgress() or InChatMessagingLockdown() then return end
         if not SenderHasRank(sender) then return end
         if IsDupe(sender, seconds) then return end
         BB:StartTimer(seconds, sender)
@@ -664,14 +663,14 @@ local function SlashBreak(msg)
         return
     end
 
-    local playerName = GetPlayerFullName()
+    local fullName, playerName = GetPlayerFullName()
     local seconds = minutes * 60
     local inGroup = IsInGroup()
-    if inGroup and not BB:Broadcast(seconds) then
+    if inGroup and not BB:Broadcast(seconds, fullName, playerName) then
         PrintCommunicationFailure("start")
         return
     end
-    BB:StartTimer(seconds, playerName, false, nil, not inGroup)
+    BB:StartTimer(seconds, fullName or "You", false, nil, not inGroup)
 end
 
 local function SlashBigBreak(msg)
@@ -698,7 +697,7 @@ local function SlashBigBreak(msg)
         BigBreakDB.flash = not BigBreakDB.flash
         Print("Flash " .. (BigBreakDB.flash and "enabled" or "disabled") .. ".")
     elseif cmd == "test" then
-        BB:StartTimer(15, GetPlayerFullName(), false, nil, true)
+        BB:StartTimer(15, GetPlayerFullName() or "You", false, nil, true)
     elseif cmd == "reset" then
         BB:ResetToDefaults()
     else

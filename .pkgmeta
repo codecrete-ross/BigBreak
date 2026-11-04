@@ -12,3 +12,4 @@ ignore:
   - README.md
   - logo.png
   - .gitignore
+  - tests

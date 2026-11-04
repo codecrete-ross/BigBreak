@@ -6,11 +6,11 @@ If guidance applies across tools, write it here first. Keep `CLAUDE.md` as a thi
 
 ## What This Is
 
-BigBreak is a simple World of Warcraft Retail addon: a break timer with DBM and BigWigs interoperability and no external dependencies.
+BigBreak is a break timer addon for World of Warcraft Retail and Forever with DBM and BigWigs interoperability and no external dependencies.
 
 ## Project Structure
 
-- `BigBreak.toc` - addon metadata and interface version
+- `BigBreak.toc` - addon metadata and supported interface versions
 - `BigBreak.lua` - all addon code
 - `CHANGELOG.md` - curated end-user changelog used by CurseForge
 - `.pkgmeta` - CurseForge packager config
@@ -18,9 +18,8 @@ BigBreak is a simple World of Warcraft Retail addon: a break timer with DBM and 
 
 ## Core Workflow
 
-1. Edit `BigBreak.toc` and `BigBreak.lua`.
-2. Deploy to the local WoW addon folder for testing:
-   `cp BigBreak.toc BigBreak.lua "/g/Battle.net Games/World of Warcraft/_retail_/Interface/AddOns/BigBreak/"`
+1. Edit `BigBreak.toc` and `BigBreak.lua` as needed.
+2. Deploy the same addon files to `Interface/AddOns/BigBreak/` under both `_retail_` and `_forever_` in the local WoW installation. Include `logo.tga` for a fresh install.
 3. Test in-game with `/reload`.
 4. Wait for user confirmation before committing, pushing, tagging, or releasing.
 5. Add a user-facing `CHANGELOG.md` entry before release.
@@ -29,8 +28,8 @@ Never push, tag, or release untested changes.
 
 ## Key Rules
 
-- Target the current Retail patch only.
-- Before compatibility updates, verify the live interface number with `/dump (select(4, GetBuildInfo()))`. Never guess from patch numbers.
+- Target the current Retail and Forever patches.
+- Before compatibility updates, verify the interface number with `/dump (select(4, GetBuildInfo()))` on live clients. For prelaunch testing, match the installed build to its UI source and check installed addon manifests. Never guess from patch numbers.
 - Before protocol-related changes, verify DBM and BigWigs D5 break-timer compatibility against the installed addon sources.
 - No global namespace pollution. Use `local` variables; the only globals should be the SavedVariables and `BigBreak_OnAddonCompartmentClick`.
 - No frames created in hot paths. Lazy-create once and reuse.
@@ -41,6 +40,7 @@ Never push, tag, or release untested changes.
 ## Key APIs
 
 - `C_ChatInfo.SendAddonMessage` / `C_ChatInfo.RegisterAddonMessagePrefix`
+- `C_InstanceEncounter.IsEncounterInProgress`
 - `Settings.RegisterCanvasLayoutCategory`
 - `MenuUtil.CreateRadioMenu`
 - `GetServerTime()`
